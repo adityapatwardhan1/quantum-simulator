@@ -79,3 +79,40 @@ def interpret_lines(file_path):
         if tokens[0] in gate_to_unitary:
             gate = tokens[0]
             
+
+# # This is kind of a naive approach
+# def get_one_qubit_gate(gate_name, qubit_num, total_num_qubits):
+#     unitary = 1
+#     for i in range(total_num_qubits):
+#         if i == qubit_num:
+#             unitary = np.kron(unitary, gate_to_unitary[gate_name])
+#         else:
+#             unitary = np.kron(unitary, I)
+#     return unitary
+
+def get_one_qubit_gate(gate_name, qubit_num, num_qubits):
+    unitary = 1
+    for i in reversed(range(num_qubits)):
+        # Apply the identity for each qubit except the one we are operating on
+        if i == qubit_num:
+            unitary = np.kron(unitary, gate_to_unitary[gate_name])
+        else:
+            unitary = np.kron(unitary, I)
+
+def get_cnot(num_ctrl, num_target, num_qubits):
+    unitary1 = 1
+    unitary2 = 1
+    # Projector based decomposition of control gates
+    for i in reversed(range(num_qubits)):
+        if i == num_target:
+            unitary1 = np.kron(unitary1, np.array([1, 0], [0, 0]))
+            unitary2 = np.kron(unitary2, np.array([0, 0], [0, 1]))
+        else:
+            unitary1 = np.kron(unitary1, I)
+            if i == num_ctrl:
+                unitary2 = np.kron(unitary2, X)
+            else:
+                unitary2 = np.kron(unitary2, I)
+
+    return unitary1 + unitary2
+     
