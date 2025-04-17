@@ -32,3 +32,50 @@ def simulate_quantum_circuit(file_path, shots):
 def compute_statevector(circuit):
     pass
 
+
+qregs = dict()
+cregs = dict()
+
+gate_to_unitary = {'h': H, 
+                   'x': X, 
+                   'y': Y, 
+                   'z': Z, 
+                   'i': I, 
+                   's': S, 
+                   'sdg': S_dag, 
+                   't': T, 
+                   'tdg': T_dag,
+                   'cx': CNOT,
+                   'ccx': None}
+
+def interpret_lines(file_path):
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    operations = []
+    for line in lines:
+        tokens = line.strip().split()
+
+        # Ignore empty lines / comments
+        if (len(tokens) == 0 or tokens[0].startswith('//') # comments
+            or tokens[0] == 'include' # include "qelib1.inc"
+            or tokens[0] == 'OPENQASM' # OPENQASM 2.0
+            or tokens[0] == 'barrier'):
+            continue
+
+        # Create quantum register
+        if tokens[0] == 'qreg' or tokens[0] == 'creg':
+            reg_name_size = tokens[1]
+            reg_name = reg_name_size.split('[')[0]
+            # Gets the number in between the [ and ]
+            reg_size = int(reg_name_size[reg_name_size.index('[') + 1 : reg_name_size.index(']')])
+            if tokens[0] == 'qreg':
+                qregs[reg_name] = [0] * reg_size
+            else:
+                cregs[reg_name] = [0] * reg_size
+
+        
+        # Apply gates
+        if tokens[0] in gate_to_unitary:
+            gate = tokens[0]
+            
