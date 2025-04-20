@@ -37,7 +37,9 @@ gate_to_unitary = {'h': H,
                    'cx': CNOT,
                    'ccx': None}
 
-def interpret_lines(file_path):
+def interpret_lines(file_path, print_state=False):
+    have_measured = False
+
     with open(file_path, 'r') as file:
         lines = file.readlines()
 
@@ -57,6 +59,11 @@ def interpret_lines(file_path):
             add_register(tokens)
 
         if tokens[0] == 'measure':
+            # Print out the qubit state
+            if not have_measured and print_state:
+                qreg_name = tokens[1].split('[')[0]
+                print(f"qregs {qreg_name} state before measurement: \n{qregs[qreg_name]}")
+                have_measured = True
             measure(tokens)
 
         # Apply gates
@@ -80,12 +87,18 @@ def apply_quantum_gate(tokens):
         control_qubit = int(tokens[1].split('[')[1].split(']')[0])
         target_qubit = int(tokens[2].split('[')[1].split(']')[0])
         cnot_gate = get_cnot(control_qubit, target_qubit, n_qubits)
-        qregs[reg_name] = cnot_gate @ qregs[reg_name] @ cnot_gate.conj().T
+        result = cnot_gate @ qregs[reg_name] @ cnot_gate.conj().T
+        p = 0.99
+        # not sure whether it's 2 or 2 ** n_qubits
+        result = p * result + (1 - p) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
+        qregs[reg_name] = result
     else:
         qubit_num = int(tokens[1].split('[')[1].split(']')[0])
         unitary = get_one_qubit_gate(gate, qubit_num, n_qubits)
-        qregs[reg_name] = unitary @ qregs[reg_name] @ unitary.conj().T
-
+        result = unitary @ qregs[reg_name] @ unitary.conj().T
+        p = 0.99
+        result = p * result + (1 - p) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
+        qregs[reg_name] = result
 
 def measure(tokens):
     # Parse qreg, creg
@@ -213,17 +226,13 @@ def simulate_quantum_circuit(file_path, shots):
         for reg_name in cregs:
             cregs[reg_name] = np.zeros(len(cregs[reg_name]))
         # Interpret the lines again to apply gates and measurements
-        interpret_lines(file_path)
+        interpret_lines(file_path, print_state=(True if i == 0 else False))
         
         measurement_outcome = tuple(tuple(cregs[reg_name]) for reg_name in cregs)
         if measurement_outcome in measurement_outcome_counts:
             measurement_outcome_counts[measurement_outcome] += 1
         else:
             measurement_outcome_counts[measurement_outcome] = 1            
-
-    print("Final quantum state:")
-    for reg_name, reg in qregs.items():
-            print(f"{reg_name}: {reg.flatten()}")
 
     print("Measurement outcomes:")
     for outcome, count in measurement_outcome_counts.items():
@@ -233,6 +242,6 @@ def simulate_quantum_circuit(file_path, shots):
 if __name__ == '__main__':
     file_path = 'bell_state.qasm'
     # file_path = 'example.qasm'
-    shots = 1000
+    shots = 4096
     interpret_lines(file_path)
     simulate_quantum_circuit(file_path, shots)
