@@ -63,12 +63,12 @@ def interpret_lines(file_path):
         if tokens[0] in gate_to_unitary:
             apply_quantum_gate(tokens)
 
-    print("Quantum Registers:")
-    for reg_name, reg in qregs.items():
-        print(f"{reg_name}: {reg.flatten()}")
-    print("Classical Registers:")
-    for reg_name, reg in cregs.items():
-        print(f"{reg_name}: {reg}")
+    # print("Quantum Registers:")
+    # for reg_name, reg in qregs.items():
+    #     print(f"{reg_name}: {reg.flatten()}")
+    # print("Classical Registers:")
+    # for reg_name, reg in cregs.items():
+    #     print(f"{reg_name}: {reg}")
 
 
 def apply_quantum_gate(tokens):
@@ -164,11 +164,15 @@ def get_cnot(num_ctrl, num_target, num_qubits):
             unitary1 = np.kron(unitary1, I)
             unitary2 = np.kron(unitary2, X)
         else:
+            unitary1 = np.kron(unitary1, I)
             unitary2 = np.kron(unitary2, I)
     return unitary1 + unitary2
      
 
 def simulate_quantum_circuit(file_path, shots):
+    # Get frequency for each classical output
+    measurement_outcome_counts = dict()
+
     for i in range(shots):
         # Reset the quantum registers
         for reg_name in qregs:
@@ -180,11 +184,25 @@ def simulate_quantum_circuit(file_path, shots):
             cregs[reg_name] = np.zeros(len(cregs[reg_name]))
         # Interpret the lines again to apply gates and measurements
         interpret_lines(file_path)
+        
+        measurement_outcome = tuple(tuple(cregs[reg_name]) for reg_name in cregs)
+        if measurement_outcome in measurement_outcome_counts:
+            measurement_outcome_counts[measurement_outcome] += 1
+        else:
+            measurement_outcome_counts[measurement_outcome] = 1            
+
+    print("Final quantum state:")
+    for reg_name, reg in qregs.items():
+            print(f"{reg_name}: {reg.flatten()}")
+
+    print("Measurement outcomes:")
+    for outcome, count in measurement_outcome_counts.items():
+        print(f"{outcome}: {count} counts")
 
 
 if __name__ == '__main__':
     file_path = 'bell_state.qasm'
     # file_path = 'example.qasm'
-    shots = 12
+    shots = 16384
     interpret_lines(file_path)
     simulate_quantum_circuit(file_path, shots)
