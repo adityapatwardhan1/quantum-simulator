@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 """
 This takes as input an OPENQASM 2.0 file and integer number of shots.
@@ -238,10 +239,38 @@ def simulate_quantum_circuit(file_path, shots):
     for outcome, count in measurement_outcome_counts.items():
         print(f"{outcome}: {count} counts")
 
+    plot_measurement_outcomes(measurement_outcome_counts)
+
+def plot_measurement_outcomes(counts):
+    labels = []
+    for outcome in counts:
+        label = ''
+        for bits in outcome:
+            for bit in bits:
+                label += str(int(bit))
+        labels.append(label)
+    
+    frequencies = [counts[outcome] for outcome in counts]
+
+    label_frequencies_pairs = list(zip(labels, frequencies))
+
+    label_frequencies_pairs.sort(key = lambda p : int(p[0], 2))
+
+    labels, frequencies = zip(*label_frequencies_pairs)
+
+    plt.figure(figsize=(10, 5))
+    plt.bar(labels, frequencies, color='blue', edgecolor='black', width = 0.3)
+    plt.xlabel('Measurement outcome')
+    plt.ylabel('Counts')
+    plt.title('Quantum Measurement Outcomes, Shots = ' + str(sum(frequencies)))
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
 
 if __name__ == '__main__':
     file_path = 'bell_state.qasm'
     # file_path = 'example.qasm'
-    shots = 4096
+    shots = 1024
     interpret_lines(file_path)
     simulate_quantum_circuit(file_path, shots)
