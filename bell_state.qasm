@@ -4,7 +4,7 @@
 qreg q[2];  // 2-qubit quantum register
 creg c[2];  // 2-bit classical register for measurement
 
-// Apply a Hadamard gate to the first qubit
+// Apply a Hadamard gate to the second qubit
 h q[1];
 
 // Apply a CNOT gate with q[0] as the control and q[1] as the target

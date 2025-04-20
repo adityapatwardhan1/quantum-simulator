@@ -2,7 +2,7 @@ import numpy as np
 
 """
 This takes as input an OPENQASM 2.0 file and integer number of shots.
-It computes the quantum sate before measurement as a complex vector
+It computes the quantum state before measurement as a complex vector
 and produces the number of counts for each possible measurement outcome.
 """
 
@@ -77,17 +77,18 @@ def interpret_lines(file_path):
             else:
                 cregs[reg_name] = np.array([0] * reg_size)
 
-        if (tokens[0] == 'measure'):
+        if tokens[0] == 'measure':
             # Measure qubit
             qreg_name = tokens[1].split('[')[0]
             qubit_num = int(tokens[1].split('[')[1].split(']')[0])
+            num_qubits = int(np.log2(len(qregs[qreg_name])))
             creg_name = tokens[3].split('[')[0]
             creg_num = int(tokens[3].split('[')[1].split(']')[0])
 
             # Measure the qubit, store result in classical register, and update statevector
             prob_measure_1 = 0
             for i in range(len(qregs[qreg_name])):
-                if i & (1 << qubit_num):
+                if i & (1 << (qubit_num)):
                     prob_measure_1 += abs(qregs[qreg_name][i][0]) ** 2
             prob_measure_0 = 1 - prob_measure_1
             print("prob_measure_0: ", prob_measure_0)
@@ -136,23 +137,16 @@ def interpret_lines(file_path):
             else:
                 qubit_num = int(tokens[1].split('[')[1].split(']')[0])
                 unitary = get_one_qubit_gate(gate, qubit_num, n_qubits)
-                print("Unitary: ", unitary)
+                print("Unitary: \n", unitary)
                 print("qregs[reg_name]: ", qregs[reg_name])
                 qregs[reg_name] = unitary @ qregs[reg_name]
-                # pass
-                # CNOT gate
-                # qubits = tokens[1].split(',')
-                # qubit_num = []
-                # for q in qubits:
-                #     if q.startswith('['):
-                #         q = q[q.index('[') + 1 : q.index(']')]
-                #     qubit_num.append(int(q))
-                # operations.append((gate, qubit_num[0], qubit_num[1]))
+                print("qregs[reg_name] after applying unitary: ", qregs[reg_name])
 
     print("Classical registers: ", cregs)
     print("Quantum registers: ", qregs)        
 
 def get_one_qubit_gate(gate_name, qubit_num, num_qubits):
+    print("get_one_qubit_gate: ", gate_name, qubit_num, num_qubits)
     unitary = 1
     for i in reversed(range(num_qubits)):
         # Apply the identity for each qubit except the one we are operating on
@@ -164,25 +158,27 @@ def get_one_qubit_gate(gate_name, qubit_num, num_qubits):
     return unitary
 
 def get_cnot(num_ctrl, num_target, num_qubits):
-    print("in get_cnot")
+    print("in get_cnot, num_ctrl = ", num_ctrl, "num_target = ", num_target)
     unitary1 = 1
     unitary2 = 1
+    P0 = np.array([[1, 0], [0, 0]])
+    P1 = np.array([[0, 0], [0, 1]])
     # Projector based decomposition of control gates
     for i in reversed(range(num_qubits)):
-        if i == num_target:
-            unitary1 = np.kron(unitary1, np.array([[1, 0], [0, 0]]))
-            unitary2 = np.kron(unitary2, np.array([[0, 0], [0, 1]]))
-        else:
+        if i == num_ctrl:
+            unitary1 = np.kron(unitary1, P0)
+            unitary2 = np.kron(unitary2, P1)
+        elif i == num_target:
             unitary1 = np.kron(unitary1, I)
-            if i == num_ctrl:
-                unitary2 = np.kron(unitary2, X)
-            else:
-                unitary2 = np.kron(unitary2, I)
+            unitary2 = np.kron(unitary2, X)
+        else:
+            unitary2 = np.kron(unitary2, I)
     print("ans = ", unitary1 + unitary2)
     return unitary1 + unitary2
      
 if __name__ == '__main__':
     # Example usage
+    # file_path = 'example.qasm'
     file_path = 'bell_state.qasm'
     # shots = 1024
     interpret_lines(file_path)
