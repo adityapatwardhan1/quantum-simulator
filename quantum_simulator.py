@@ -22,17 +22,6 @@ CNOT = np.array([[1, 0, 0, 0],
                  [0, 0, 0, 1],
                  [0, 0, 1, 0]])
 
-
-def parse_openqasm(file_path):
-    pass
-
-def simulate_quantum_circuit(file_path, shots):
-    pass
-
-def compute_statevector(circuit):
-    pass
-
-
 qregs = dict()
 cregs = dict()
 
@@ -65,88 +54,91 @@ def interpret_lines(file_path):
 
         # Create quantum register
         if tokens[0] == 'qreg' or tokens[0] == 'creg':
-            reg_name_size = tokens[1]
-            reg_name = reg_name_size.split('[')[0]
-            # Gets the number in between the [ and ]
-            reg_size = int(reg_name_size[reg_name_size.index('[') + 1 : reg_name_size.index(']')])
-            if tokens[0] == 'qreg':
-                qregs[reg_name] = np.array([0] * (int(2 ** reg_size)))
-                qregs[reg_name][0] = 1
-                qregs[reg_name] = qregs[reg_name].reshape(-1, 1)
-                print("Quantum register: ", qregs[reg_name])
-            else:
-                cregs[reg_name] = np.array([0] * reg_size)
+            add_register(tokens)
 
         if tokens[0] == 'measure':
-            # Measure qubit
-            qreg_name = tokens[1].split('[')[0]
-            qubit_num = int(tokens[1].split('[')[1].split(']')[0])
-            num_qubits = int(np.log2(len(qregs[qreg_name])))
-            creg_name = tokens[3].split('[')[0]
-            creg_num = int(tokens[3].split('[')[1].split(']')[0])
-
-            # Measure the qubit, store result in classical register, and update statevector
-            prob_measure_1 = 0
-            for i in range(len(qregs[qreg_name])):
-                if i & (1 << (qubit_num)):
-                    prob_measure_1 += abs(qregs[qreg_name][i][0]) ** 2
-            prob_measure_0 = 1 - prob_measure_1
-            print("prob_measure_0: ", prob_measure_0)
-            print("prob_measure_1: ", prob_measure_1)
-            # Update classical register
-            result = cregs[creg_name][creg_num] = np.random.choice([0, 1], p=[prob_measure_0, prob_measure_1])
-            print("result: ", result)
-
-            normalization_factor = sum(abs(qregs[qreg_name]) ** 2)
-            # Update quantum register
-            if result == 0:
-                for i in range(len(qregs[qreg_name])):
-                    if i & (1 << qubit_num):
-                        qregs[qreg_name][i][0] = 0
-                    # else:
-                    #     qregs[qreg_name][i] /= np.sqrt(prob_measure_0)
-            else:
-                for i in range(len(qregs[qreg_name])):
-                    if not (i & (1 << qubit_num)):
-                        qregs[qreg_name][i][0] = 0
-                    # else:
-                    #     qregs[qreg_name][i] /= np.sqrt(prob_measure_1)
-
-            normalization_factor = 0
-            for i in range(len(qregs[qreg_name])):
-                normalization_factor += abs(qregs[qreg_name][i][0]) ** 2
-            print("normalization factor = ", normalization_factor)
-
-            # Normalize the quantum register
-            if normalization_factor != 0:
-                for i in range(len(qregs[qreg_name])):
-                    qregs[qreg_name][i][0] /= np.sqrt(normalization_factor)
-                # qregs[qreg_name] /= np.sqrt(normalization_factor)
+            measure(tokens)
 
         # Apply gates
         if tokens[0] in gate_to_unitary:
-            gate = tokens[0]
-            reg_name = tokens[1].split('[')[0]
+            apply_quantum_gate(tokens)
 
-            n_qubits = int(np.log2(len(qregs[reg_name])))
-            if gate == 'cx':
-                control_qubit = int(tokens[1].split('[')[1].split(']')[0])
-                target_qubit = int(tokens[2].split('[')[1].split(']')[0])
-                cnot_gate = get_cnot(control_qubit, target_qubit, n_qubits)
-                qregs[reg_name] = cnot_gate @ qregs[reg_name]
-            else:
-                qubit_num = int(tokens[1].split('[')[1].split(']')[0])
-                unitary = get_one_qubit_gate(gate, qubit_num, n_qubits)
-                print("Unitary: \n", unitary)
-                print("qregs[reg_name]: ", qregs[reg_name])
-                qregs[reg_name] = unitary @ qregs[reg_name]
-                print("qregs[reg_name] after applying unitary: ", qregs[reg_name])
+    print("Quantum Registers:")
+    for reg_name, reg in qregs.items():
+        print(f"{reg_name}: {reg.flatten()}")
+    print("Classical Registers:")
+    for reg_name, reg in cregs.items():
+        print(f"{reg_name}: {reg}")
 
-    print("Classical registers: ", cregs)
-    print("Quantum registers: ", qregs)        
+
+def apply_quantum_gate(tokens):
+    gate = tokens[0]
+    reg_name = tokens[1].split('[')[0]
+
+    n_qubits = int(np.log2(len(qregs[reg_name])))
+    if gate == 'cx':
+        control_qubit = int(tokens[1].split('[')[1].split(']')[0])
+        target_qubit = int(tokens[2].split('[')[1].split(']')[0])
+        cnot_gate = get_cnot(control_qubit, target_qubit, n_qubits)
+        qregs[reg_name] = cnot_gate @ qregs[reg_name]
+    else:
+        qubit_num = int(tokens[1].split('[')[1].split(']')[0])
+        unitary = get_one_qubit_gate(gate, qubit_num, n_qubits)
+        qregs[reg_name] = unitary @ qregs[reg_name]
+
+
+def measure(tokens):
+    # Parse qreg, creg
+    qreg_name = tokens[1].split('[')[0]
+    qubit_num = int(tokens[1].split('[')[1].split(']')[0])
+    num_qubits = int(np.log2(len(qregs[qreg_name])))
+    creg_name = tokens[3].split('[')[0]
+    creg_num = int(tokens[3].split('[')[1].split(']')[0])
+
+    # Compute probabilities
+    prob_measure_1 = 0
+    for i in range(len(qregs[qreg_name])):
+        if i & (1 << (qubit_num)):
+            prob_measure_1 += abs(qregs[qreg_name][i][0]) ** 2
+    prob_measure_0 = 1 - prob_measure_1
+
+    # Update classical register
+    result = cregs[creg_name][creg_num] = np.random.choice([0, 1], p=[prob_measure_0, prob_measure_1])
+
+    # Zero out remaining entries based on what the qubit collapses to
+    if result == 0:
+        for i in range(len(qregs[qreg_name])):
+            if i & (1 << qubit_num):
+                qregs[qreg_name][i][0] = 0
+    else:
+        for i in range(len(qregs[qreg_name])):
+            if not (i & (1 << qubit_num)):
+                qregs[qreg_name][i][0] = 0
+
+    normalization_factor = 0
+    for i in range(len(qregs[qreg_name])):
+        normalization_factor += abs(qregs[qreg_name][i][0]) ** 2
+
+    # Normalize the quantum register
+    if normalization_factor != 0:
+        for i in range(len(qregs[qreg_name])):
+            qregs[qreg_name][i][0] /= np.sqrt(normalization_factor)
+
+
+def add_register(tokens):
+    reg_name_size = tokens[1]
+    reg_name = reg_name_size.split('[')[0]
+            # Gets the number in between the [ and ]
+    reg_size = int(reg_name_size[reg_name_size.index('[') + 1 : reg_name_size.index(']')])
+    if tokens[0] == 'qreg':
+        qregs[reg_name] = np.array([0] * (int(2 ** reg_size)))
+        qregs[reg_name][0] = 1
+        qregs[reg_name] = qregs[reg_name].reshape(-1, 1)
+    else:
+        cregs[reg_name] = np.array([0] * reg_size)       
+
 
 def get_one_qubit_gate(gate_name, qubit_num, num_qubits):
-    print("get_one_qubit_gate: ", gate_name, qubit_num, num_qubits)
     unitary = 1
     for i in reversed(range(num_qubits)):
         # Apply the identity for each qubit except the one we are operating on
@@ -157,8 +149,8 @@ def get_one_qubit_gate(gate_name, qubit_num, num_qubits):
 
     return unitary
 
+
 def get_cnot(num_ctrl, num_target, num_qubits):
-    print("in get_cnot, num_ctrl = ", num_ctrl, "num_target = ", num_target)
     unitary1 = 1
     unitary2 = 1
     P0 = np.array([[1, 0], [0, 0]])
@@ -173,13 +165,26 @@ def get_cnot(num_ctrl, num_target, num_qubits):
             unitary2 = np.kron(unitary2, X)
         else:
             unitary2 = np.kron(unitary2, I)
-    print("ans = ", unitary1 + unitary2)
     return unitary1 + unitary2
      
+
+def simulate_quantum_circuit(file_path, shots):
+    for i in range(shots):
+        # Reset the quantum registers
+        for reg_name in qregs:
+            qregs[reg_name] = np.zeros((2 ** len(qregs[reg_name]), 1))
+            qregs[reg_name][0] = 1
+
+        # Reset the classical registers
+        for reg_name in cregs:
+            cregs[reg_name] = np.zeros(len(cregs[reg_name]))
+        # Interpret the lines again to apply gates and measurements
+        interpret_lines(file_path)
+
+
 if __name__ == '__main__':
-    # Example usage
-    # file_path = 'example.qasm'
     file_path = 'bell_state.qasm'
-    # shots = 1024
+    # file_path = 'example.qasm'
+    shots = 12
     interpret_lines(file_path)
-    # simulate_quantum_circuit(file_path, shots)
+    simulate_quantum_circuit(file_path, shots)
