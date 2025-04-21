@@ -248,7 +248,7 @@ def plot_measurement_outcomes(counts):
     for outcome in counts:
         label = ''
         for bits in outcome:
-            for bit in bits:
+            for bit in reversed(bits):
                 label += str(int(bit))
         labels.append(label)
     
