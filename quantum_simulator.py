@@ -38,7 +38,7 @@ gate_to_unitary = {'h': H,
                    'cx': CNOT,
                    'ccx': None}
 
-def interpret_lines(file_path, print_state=False, noise=False):
+def interpret_lines(file_path, noise, print_state=False):
     have_measured = False
 
     with open(file_path, 'r') as file:
@@ -79,7 +79,7 @@ def interpret_lines(file_path, print_state=False, noise=False):
     #     print(f"{reg_name}: {reg}")
 
 
-def apply_quantum_gate(tokens, noise=False):
+def apply_quantum_gate(tokens, noise):
     gate = tokens[0]
     reg_name = tokens[1].split('[')[0]
 
@@ -210,7 +210,7 @@ def get_cnot(num_ctrl, num_target, num_qubits):
     return unitary1 + unitary2
      
 
-def simulate_quantum_circuit(file_path, shots):
+def simulate_quantum_circuit(file_path, shots, noise):
     # Get frequency for each classical output
     measurement_outcome_counts = dict()
 
@@ -229,7 +229,7 @@ def simulate_quantum_circuit(file_path, shots):
         for reg_name in cregs:
             cregs[reg_name] = np.zeros(len(cregs[reg_name]))
         # Interpret the lines again to apply gates and measurements
-        interpret_lines(file_path, print_state=(True if i == 0 else False))
+        interpret_lines(file_path, noise, print_state=(True if i == 0 else False))
         
         measurement_outcome = tuple(tuple(cregs[reg_name]) for reg_name in cregs)
         if measurement_outcome in measurement_outcome_counts:
@@ -275,7 +275,8 @@ if __name__ == '__main__':
     file_path = input("Enter QASM file path: ")
     shots = int(input("Enter number of shots: "))
     noise = input("Model noisy gates? (Y/N): ") == "Y"
+    print("noise inputted: ", noise)
     # file_path = 'example.qasm'
     # shots = 1024
     interpret_lines(file_path, noise)
-    simulate_quantum_circuit(file_path, shots)
+    simulate_quantum_circuit(file_path, shots, noise)
