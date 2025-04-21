@@ -38,7 +38,7 @@ gate_to_unitary = {'h': H,
                    'cx': CNOT,
                    'ccx': None}
 
-def interpret_lines(file_path, print_state=False):
+def interpret_lines(file_path, print_state=False, noise=False):
     have_measured = False
 
     with open(file_path, 'r') as file:
@@ -69,7 +69,7 @@ def interpret_lines(file_path, print_state=False):
 
         # Apply gates
         if tokens[0] in gate_to_unitary:
-            apply_quantum_gate(tokens)
+            apply_quantum_gate(tokens, noise)
 
     # print("Quantum Registers:")
     # for reg_name, reg in qregs.items():
@@ -79,7 +79,7 @@ def interpret_lines(file_path, print_state=False):
     #     print(f"{reg_name}: {reg}")
 
 
-def apply_quantum_gate(tokens):
+def apply_quantum_gate(tokens, noise=False):
     gate = tokens[0]
     reg_name = tokens[1].split('[')[0]
 
@@ -91,14 +91,16 @@ def apply_quantum_gate(tokens):
         result = cnot_gate @ qregs[reg_name] @ cnot_gate.conj().T
         p = 0.99
         # not sure whether it's 2 or 2 ** n_qubits
-        result = p * result + (1 - p) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
+        if noise:
+            result = p * result + (1 - p) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
         qregs[reg_name] = result
     else:
         qubit_num = int(tokens[1].split('[')[1].split(']')[0])
         unitary = get_one_qubit_gate(gate, qubit_num, n_qubits)
         result = unitary @ qregs[reg_name] @ unitary.conj().T
         p = 0.99
-        result = p * result + (1 - p) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
+        if noise:
+            result = p * result + (1 - p) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
         qregs[reg_name] = result
 
 def measure(tokens):
@@ -113,7 +115,7 @@ def measure(tokens):
     rho = qregs[qreg_name]
 
     # Compute probabilities
-    prob_measure_1 = np.trace(P1 @ rho).real
+    prob_measure_1 = min(max(0, np.trace(P1 @ rho).real), 1)
     prob_measure_0 = 1 - prob_measure_1
 
     # Update classical register
@@ -269,8 +271,11 @@ def plot_measurement_outcomes(counts):
 
 
 if __name__ == '__main__':
-    file_path = 'bell_state.qasm'
+    # file_path = 'test_4.qasm'
+    file_path = input("Enter QASM file path: ")
+    shots = int(input("Enter number of shots: "))
+    noise = input("Model noisy gates? (Y/N): ") == "Y"
     # file_path = 'example.qasm'
-    shots = 1024
-    interpret_lines(file_path)
+    # shots = 1024
+    interpret_lines(file_path, noise)
     simulate_quantum_circuit(file_path, shots)
