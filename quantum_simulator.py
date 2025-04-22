@@ -86,21 +86,19 @@ def apply_quantum_gate(tokens, noise):
     if gate == 'cx':
         control_qubit = int(tokens[1].split('[')[1].split(']')[0])
         target_qubit = int(tokens[2].split('[')[1].split(']')[0])
-        cnot_gate = get_cnot(control_qubit, target_qubit, n_qubits)
+        cnot_gate = get_cnot(control_qubit, target_qubit, n_qubits, noise=noise)
         result = cnot_gate @ qregs[reg_name] @ cnot_gate.conj().T
-        if noise:
-            result = gate_to_p[gate] * result + (1 - gate_to_p[gate]) * 1 / 2 * get_depolarization_matrix(control_qubit, n_qubits)
         qregs[reg_name] = result
 
+        cnot_gate = get_cnot(control_qubit, target_qubit, n_qubits, noise=False) # No noise when computing exact statevector
         qregs_sv[reg_name] = cnot_gate @ qregs_sv[reg_name]
     else:
         qubit_num = int(tokens[1].split('[')[1].split(']')[0])
-        unitary = get_one_qubit_gate(gate, qubit_num, n_qubits)
+        unitary = get_one_qubit_gate(gate, qubit_num, n_qubits, noise=noise)
         result = unitary @ qregs[reg_name] @ unitary.conj().T
-        if noise:
-            result = gate_to_p[gate] * result + (1 - gate_to_p[gate]) * 1 / 2 * get_depolarization_matrix(qubit_num, n_qubits)
         qregs[reg_name] = result
 
+        unitary = get_one_qubit_gate(gate, qubit_num, n_qubits, noise=False) # No noise when computing exact statevector
         qregs_sv[reg_name] = unitary @ qregs_sv[reg_name]
 
 def measure(tokens):
@@ -166,30 +164,24 @@ def add_register(tokens):
         cregs[reg_name] = np.array([0] * reg_size)       
 
 
-def get_one_qubit_gate(gate_name, qubit_num, num_qubits):
+def get_one_qubit_gate(gate_name, qubit_num, num_qubits, noise=False):
     unitary = 1
     for i in reversed(range(num_qubits)):
         # Apply the identity for each qubit except the one we are operating on
         if i == qubit_num:
-            unitary = np.kron(unitary, gate_to_unitary[gate_name])
-        else:
-            unitary = np.kron(unitary, I)
-
-    return unitary
-
-def get_depolarization_matrix(qubit_num, num_qubits):
-    unitary = 1
-    for i in reversed(range(num_qubits)):
-        # Apply the identity for each qubit except the one we are operating on
-        if i == qubit_num:
-            unitary = np.kron(unitary, I / 2)
+            # Apply noisy matrix if noise=True
+            if noise:
+                unitary = np.kron(unitary, gate_to_p[gate_name] * gate_to_unitary[gate_name] + 
+                                  (1 - gate_to_p[gate_name]) * (1 / 2) * I)
+            else:
+                unitary = np.kron(unitary, gate_to_unitary[gate_name])
         else:
             unitary = np.kron(unitary, I)
 
     return unitary
 
 
-def get_cnot(num_ctrl, num_target, num_qubits):
+def get_cnot(num_ctrl, num_target, num_qubits, noise=False):
     unitary1 = 1
     unitary2 = 1
     P0 = np.array([[1, 0], [0, 0]])
@@ -200,8 +192,15 @@ def get_cnot(num_ctrl, num_target, num_qubits):
             unitary1 = np.kron(unitary1, P0)
             unitary2 = np.kron(unitary2, P1)
         elif i == num_target:
-            unitary1 = np.kron(unitary1, I)
-            unitary2 = np.kron(unitary2, X)
+            # Apply noise if noise=True
+            if noise:
+                unitary1 = np.kron(unitary1, gate_to_p['cx'] * I + 
+                                   (1 - gate_to_p['cx']) * (1 / 2) * I)
+                unitary2 = np.kron(unitary2, gate_to_p['cx'] * X + 
+                                   (1 - gate_to_p['cx']) * (1 / 2) * I)
+            else:
+                unitary1 = np.kron(unitary1, I)
+                unitary2 = np.kron(unitary2, X)
         else:
             unitary1 = np.kron(unitary1, I)
             unitary2 = np.kron(unitary2, I)
@@ -265,7 +264,6 @@ def plot_measurement_outcomes(counts):
 
 
 if __name__ == '__main__':
-    # file_path = 'test_4.qasm'
     file_path = input("Enter QASM file path: ")
     shots = int(input("Enter number of shots: "))
     noise = input("Model noisy gates? (Y/N): ").upper() == "Y"
