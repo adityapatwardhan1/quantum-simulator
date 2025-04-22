@@ -130,15 +130,6 @@ def measure(tokens):
         new_rho = P1 @ rho @ P1
         qregs[qreg_name] = new_rho / prob_measure_1 if prob_measure_1 != 0 else new_rho
 
-    normalization_factor = 0
-    for i in range(len(qregs[qreg_name])):
-        normalization_factor += abs(qregs[qreg_name][i][0]) ** 2
-
-    # Normalize the quantum register
-    if normalization_factor != 0:
-        for i in range(len(qregs[qreg_name])):
-            qregs[qreg_name][i][0] /= np.sqrt(normalization_factor)
-
 
 def measurement_operators(qubit_num, num_qubits):
     # Projector based decomposition of measurement operators
