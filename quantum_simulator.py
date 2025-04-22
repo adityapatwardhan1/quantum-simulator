@@ -27,6 +27,9 @@ qregs = dict()
 qregs_sv = dict() # Statevector form
 cregs = dict()
 
+# p for each gate
+p_x = p_y = p_z = p_t = p_s = p_tdag = p_sdag = p_h = p_cnot = 1
+
 gate_to_unitary = {'h': H, 
                    'x': X, 
                    'y': Y, 
@@ -38,6 +41,8 @@ gate_to_unitary = {'h': H,
                    'tdg': T_dag,
                    'cx': CNOT,
                    'ccx': None}
+
+gate_to_p = dict()
 
 def interpret_lines(file_path, noise, print_state=False):
     have_measured = False
@@ -83,9 +88,8 @@ def apply_quantum_gate(tokens, noise):
         target_qubit = int(tokens[2].split('[')[1].split(']')[0])
         cnot_gate = get_cnot(control_qubit, target_qubit, n_qubits)
         result = cnot_gate @ qregs[reg_name] @ cnot_gate.conj().T
-        p = 0.99
         if noise:
-            result = p * result + (1 - p) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
+            result = gate_to_p[gate] * result + (1 - gate_to_p[gate]) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
         qregs[reg_name] = result
 
         qregs_sv[reg_name] = cnot_gate @ qregs_sv[reg_name]
@@ -93,9 +97,8 @@ def apply_quantum_gate(tokens, noise):
         qubit_num = int(tokens[1].split('[')[1].split(']')[0])
         unitary = get_one_qubit_gate(gate, qubit_num, n_qubits)
         result = unitary @ qregs[reg_name] @ unitary.conj().T
-        p = 0.99
         if noise:
-            result = p * result + (1 - p) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
+            result = gate_to_p[gate] * result + (1 - gate_to_p[gate]) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
         qregs[reg_name] = result
 
         qregs_sv[reg_name] = unitary @ qregs_sv[reg_name]
@@ -263,7 +266,59 @@ if __name__ == '__main__':
     # file_path = 'test_4.qasm'
     file_path = input("Enter QASM file path: ")
     shots = int(input("Enter number of shots: "))
-    noise = input("Model noisy gates? (Y/N): ") == "Y"
+    noise = input("Model noisy gates? (Y/N): ").upper() == "Y"
     print("noise inputted: ", noise)
+    if noise:
+        print("Do you want a single p for all gates? (Y/N): ")
+        single_p = input().upper() == "Y"
+        if single_p:
+            print("Set p: ")
+            p = float(input())
+            p_x = p_y = p_z = p_t = p_s = p_tdag = p_sdag = p_h = p_cnot = p
+
+            gate_to_p = {'h': p_h,
+              'x': p_x,
+              'y': p_y,
+              'z': p_z,
+              'i': 1,
+              's': p_s,
+              'sdg': p_sdag,
+              't': p_t,
+              'tdg': p_tdag,
+              'cx': p_cnot,
+              'ccx': None}
+        else:
+            print("Set p for each gate: ")
+            print("p for X: ")
+            p_x = float(input())
+            print("p for Y:")
+            p_y = float(input())
+            print("p for Z: ")
+            p_z = float(input())
+            print("p for T: ")
+            p_t = float(input())
+            print("p for S: ")
+            p_s = float(input())
+            print("p for T_dag: ")
+            p_tdag = float(input())
+            print("p for S_dag: ")
+            p_sdag = float(input())
+            print("p for H: ")
+            p_h = float(input())
+            print("p for CNOT: ")
+            p_cnot = float(input())
+
+            gate_to_p = {'h': p_h,
+              'x': p_x,
+              'y': p_y,
+              'z': p_z,
+              'i': 1,
+              's': p_s,
+              'sdg': p_sdag,
+              't': p_t,
+              'tdg': p_tdag,
+              'cx': p_cnot,
+              'ccx': None}
+
     interpret_lines(file_path, noise)
     simulate_quantum_circuit(file_path, shots, noise)
