@@ -269,7 +269,6 @@ if __name__ == '__main__':
     file_path = input("Enter QASM file path: ")
     shots = int(input("Enter number of shots: "))
     noise = input("Model noisy gates? (Y/N): ").upper() == "Y"
-    print("noise inputted: ", noise)
     if noise:
         print("Do you want a single p for all gates? (Y/N): ")
         single_p = input().upper() == "Y"
