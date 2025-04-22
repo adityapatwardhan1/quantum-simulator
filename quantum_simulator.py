@@ -24,6 +24,7 @@ CNOT = np.array([[1, 0, 0, 0],
                  [0, 0, 1, 0]])
 
 qregs = dict()
+qregs_sv = dict() # Statevector form
 cregs = dict()
 
 gate_to_unitary = {'h': H, 
@@ -63,20 +64,13 @@ def interpret_lines(file_path, noise, print_state=False):
             # Print out the qubit state
             if not have_measured and print_state:
                 qreg_name = tokens[1].split('[')[0]
-                print(f"qregs {qreg_name} state before measurement: \n{qregs[qreg_name]}")
+                print(f"qregs {qreg_name} statevector before measurement: \n{qregs_sv[qreg_name]}")
                 have_measured = True
             measure(tokens)
 
         # Apply gates
         if tokens[0] in gate_to_unitary:
             apply_quantum_gate(tokens, noise)
-
-    # print("Quantum Registers:")
-    # for reg_name, reg in qregs.items():
-    #     print(f"{reg_name}: {reg.flatten()}")
-    # print("Classical Registers:")
-    # for reg_name, reg in cregs.items():
-    #     print(f"{reg_name}: {reg}")
 
 
 def apply_quantum_gate(tokens, noise):
@@ -90,10 +84,11 @@ def apply_quantum_gate(tokens, noise):
         cnot_gate = get_cnot(control_qubit, target_qubit, n_qubits)
         result = cnot_gate @ qregs[reg_name] @ cnot_gate.conj().T
         p = 0.99
-        # not sure whether it's 2 or 2 ** n_qubits
         if noise:
             result = p * result + (1 - p) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
         qregs[reg_name] = result
+
+        qregs_sv[reg_name] = cnot_gate @ qregs_sv[reg_name]
     else:
         qubit_num = int(tokens[1].split('[')[1].split(']')[0])
         unitary = get_one_qubit_gate(gate, qubit_num, n_qubits)
@@ -102,6 +97,8 @@ def apply_quantum_gate(tokens, noise):
         if noise:
             result = p * result + (1 - p) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
         qregs[reg_name] = result
+
+        qregs_sv[reg_name] = unitary @ qregs_sv[reg_name]
 
 def measure(tokens):
     # Parse qreg, creg
@@ -125,15 +122,10 @@ def measure(tokens):
     if result == 0:
         new_rho = P0 @ rho @ P0
         qregs[qreg_name] = new_rho / prob_measure_0 if prob_measure_0 != 0 else new_rho
-        # for i in range(len(qregs[qreg_name])):
-        #     if i & (1 << qubit_num):
-        #         qregs[qreg_name][i][0] = 0
+
     else:
         new_rho = P1 @ rho @ P1
         qregs[qreg_name] = new_rho / prob_measure_1 if prob_measure_1 != 0 else new_rho
-        # for i in range(len(qregs[qreg_name])):
-        #     if not (i & (1 << qubit_num)):
-        #         qregs[qreg_name][i][0] = 0
 
     normalization_factor = 0
     for i in range(len(qregs[qreg_name])):
@@ -175,6 +167,7 @@ def add_register(tokens):
         psi[0] = 1
         rho = psi @ psi.conj().T
         qregs[reg_name] = rho
+        qregs_sv[reg_name] = psi
     else:
         cregs[reg_name] = np.array([0] * reg_size)       
 
@@ -222,8 +215,7 @@ def simulate_quantum_circuit(file_path, shots, noise):
             psi[0] = 1
             rho = psi @ psi.conj().T
             qregs[reg_name] = rho
-            # qregs[reg_name] = np.zeros((2 ** len(qregs[reg_name]), 1))
-            # qregs[reg_name][0] = 1
+            qregs_sv[reg_name] = psi
 
         # Reset the classical registers
         for reg_name in cregs:
@@ -253,11 +245,8 @@ def plot_measurement_outcomes(counts):
         labels.append(label)
     
     frequencies = [counts[outcome] for outcome in counts]
-
     label_frequencies_pairs = list(zip(labels, frequencies))
-
     label_frequencies_pairs.sort(key = lambda p : int(p[0], 2))
-
     labels, frequencies = zip(*label_frequencies_pairs)
 
     plt.figure(figsize=(10, 5))
@@ -276,7 +265,5 @@ if __name__ == '__main__':
     shots = int(input("Enter number of shots: "))
     noise = input("Model noisy gates? (Y/N): ") == "Y"
     print("noise inputted: ", noise)
-    # file_path = 'example.qasm'
-    # shots = 1024
     interpret_lines(file_path, noise)
     simulate_quantum_circuit(file_path, shots, noise)
