@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+ 
 """
 This takes as input an OPENQASM 2.0 file and integer number of shots.
 It computes the quantum state before measurement as a complex vector
@@ -19,9 +19,9 @@ S_dag = np.array([[1, 0], [0, -1j]])
 H = 1 / np.sqrt(2) * np.array([[1, 1], [1, -1]])
 
 CNOT = np.array([[1, 0, 0, 0],
-                 [0, 1, 0, 0],
-                 [0, 0, 0, 1],
-                 [0, 0, 1, 0]])
+                [0, 1, 0, 0],
+                [0, 0, 0, 1],
+                [0, 0, 1, 0]])
 
 qregs = dict()
 qregs_sv = dict() # Statevector form
@@ -31,16 +31,16 @@ cregs = dict()
 p_x = p_y = p_z = p_t = p_s = p_tdag = p_sdag = p_h = p_cnot = 1
 
 gate_to_unitary = {'h': H, 
-                   'x': X, 
-                   'y': Y, 
-                   'z': Z, 
-                   'i': I, 
-                   's': S, 
-                   'sdg': S_dag, 
-                   't': T, 
-                   'tdg': T_dag,
-                   'cx': CNOT,
-                   'ccx': None}
+                'x': X, 
+                'y': Y, 
+                'z': Z, 
+                'i': I, 
+                's': S, 
+                'sdg': S_dag, 
+                't': T, 
+                'tdg': T_dag,
+                'cx': CNOT,
+                'ccx': None}
 
 gate_to_p = dict()
 
@@ -86,19 +86,21 @@ def apply_quantum_gate(tokens, noise):
     if gate == 'cx':
         control_qubit = int(tokens[1].split('[')[1].split(']')[0])
         target_qubit = int(tokens[2].split('[')[1].split(']')[0])
-        cnot_gate = get_cnot(control_qubit, target_qubit, n_qubits, noise=noise)
+        cnot_gate = get_cnot(control_qubit, target_qubit, n_qubits)
         result = cnot_gate @ qregs[reg_name] @ cnot_gate.conj().T
+        if noise:
+            result = gate_to_p[gate] * result + (1 - gate_to_p[gate]) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
         qregs[reg_name] = result
 
-        cnot_gate = get_cnot(control_qubit, target_qubit, n_qubits, noise=False) # No noise when computing exact statevector
         qregs_sv[reg_name] = cnot_gate @ qregs_sv[reg_name]
     else:
         qubit_num = int(tokens[1].split('[')[1].split(']')[0])
-        unitary = get_one_qubit_gate(gate, qubit_num, n_qubits, noise=noise)
+        unitary = get_one_qubit_gate(gate, qubit_num, n_qubits)
         result = unitary @ qregs[reg_name] @ unitary.conj().T
+        if noise:
+            result = gate_to_p[gate] * result + (1 - gate_to_p[gate]) * 1 / (2 ** n_qubits) * np.eye(2 ** n_qubits)
         qregs[reg_name] = result
 
-        unitary = get_one_qubit_gate(gate, qubit_num, n_qubits, noise=False) # No noise when computing exact statevector
         qregs_sv[reg_name] = unitary @ qregs_sv[reg_name]
 
 def measure(tokens):
@@ -127,6 +129,15 @@ def measure(tokens):
     else:
         new_rho = P1 @ rho @ P1
         qregs[qreg_name] = new_rho / prob_measure_1 if prob_measure_1 != 0 else new_rho
+
+    normalization_factor = 0
+    for i in range(len(qregs[qreg_name])):
+        normalization_factor += abs(qregs[qreg_name][i][0]) ** 2
+
+    # Normalize the quantum register
+    if normalization_factor != 0:
+        for i in range(len(qregs[qreg_name])):
+            qregs[qreg_name][i][0] /= np.sqrt(normalization_factor)
 
 
 def measurement_operators(qubit_num, num_qubits):
@@ -164,24 +175,19 @@ def add_register(tokens):
         cregs[reg_name] = np.array([0] * reg_size)       
 
 
-def get_one_qubit_gate(gate_name, qubit_num, num_qubits, noise=False):
+def get_one_qubit_gate(gate_name, qubit_num, num_qubits):
     unitary = 1
     for i in reversed(range(num_qubits)):
         # Apply the identity for each qubit except the one we are operating on
         if i == qubit_num:
-            # Apply noisy matrix if noise=True
-            if noise:
-                unitary = np.kron(unitary, gate_to_p[gate_name] * gate_to_unitary[gate_name] + 
-                                  (1 - gate_to_p[gate_name]) * (1 / 2) * I)
-            else:
-                unitary = np.kron(unitary, gate_to_unitary[gate_name])
+            unitary = np.kron(unitary, gate_to_unitary[gate_name])
         else:
             unitary = np.kron(unitary, I)
 
     return unitary
 
 
-def get_cnot(num_ctrl, num_target, num_qubits, noise=False):
+def get_cnot(num_ctrl, num_target, num_qubits):
     unitary1 = 1
     unitary2 = 1
     P0 = np.array([[1, 0], [0, 0]])
@@ -192,20 +198,13 @@ def get_cnot(num_ctrl, num_target, num_qubits, noise=False):
             unitary1 = np.kron(unitary1, P0)
             unitary2 = np.kron(unitary2, P1)
         elif i == num_target:
-            # Apply noise if noise=True
-            if noise:
-                unitary1 = np.kron(unitary1, gate_to_p['cx'] * I + 
-                                   (1 - gate_to_p['cx']) * (1 / 2) * I)
-                unitary2 = np.kron(unitary2, gate_to_p['cx'] * X + 
-                                   (1 - gate_to_p['cx']) * (1 / 2) * I)
-            else:
-                unitary1 = np.kron(unitary1, I)
-                unitary2 = np.kron(unitary2, X)
+            unitary1 = np.kron(unitary1, I)
+            unitary2 = np.kron(unitary2, X)
         else:
             unitary1 = np.kron(unitary1, I)
             unitary2 = np.kron(unitary2, I)
     return unitary1 + unitary2
-     
+
 
 def simulate_quantum_circuit(file_path, shots, noise):
     # Get frequency for each classical output
@@ -226,7 +225,7 @@ def simulate_quantum_circuit(file_path, shots, noise):
             cregs[reg_name] = np.zeros(len(cregs[reg_name]))
         # Interpret the lines again to apply gates and measurements
         interpret_lines(file_path, noise, print_state=(True if i == 0 else False))
-        
+
         measurement_outcome = tuple(tuple(cregs[reg_name]) for reg_name in cregs)
         if measurement_outcome in measurement_outcome_counts:
             measurement_outcome_counts[measurement_outcome] += 1
@@ -247,7 +246,7 @@ def plot_measurement_outcomes(counts):
             for bit in reversed(bits):
                 label += str(int(bit))
         labels.append(label)
-    
+
     frequencies = [counts[outcome] for outcome in counts]
     label_frequencies_pairs = list(zip(labels, frequencies))
     label_frequencies_pairs.sort(key = lambda p : int(p[0], 2))
@@ -264,60 +263,50 @@ def plot_measurement_outcomes(counts):
 
 
 if __name__ == '__main__':
+    # file_path = 'test_4.qasm'
     file_path = input("Enter QASM file path: ")
     shots = int(input("Enter number of shots: "))
     noise = input("Model noisy gates? (Y/N): ").upper() == "Y"
     if noise:
-        print("Do you want a single p for all gates? (Y/N): ")
-        single_p = input().upper() == "Y"
+        single_p = input("Do you want a single p for all gates? (Y/N): ").upper() == "Y"
         if single_p:
-            print("Set p: ")
-            p = float(input())
+            p = float(input("Set p: "))
             p_x = p_y = p_z = p_t = p_s = p_tdag = p_sdag = p_h = p_cnot = p
 
             gate_to_p = {'h': p_h,
-              'x': p_x,
-              'y': p_y,
-              'z': p_z,
-              'i': 1,
-              's': p_s,
-              'sdg': p_sdag,
-              't': p_t,
-              'tdg': p_tdag,
-              'cx': p_cnot,
-              'ccx': None}
+            'x': p_x,
+            'y': p_y,
+            'z': p_z,
+            'i': 1,
+            's': p_s,
+            'sdg': p_sdag,
+            't': p_t,
+            'tdg': p_tdag,
+            'cx': p_cnot,
+            'ccx': None}
         else:
             print("Set p for each gate: ")
-            print("p for X: ")
-            p_x = float(input())
-            print("p for Y:")
-            p_y = float(input())
-            print("p for Z: ")
-            p_z = float(input())
-            print("p for T: ")
-            p_t = float(input())
-            print("p for S: ")
-            p_s = float(input())
-            print("p for T_dag: ")
-            p_tdag = float(input())
-            print("p for S_dag: ")
-            p_sdag = float(input())
-            print("p for H: ")
-            p_h = float(input())
-            print("p for CNOT: ")
-            p_cnot = float(input())
+            p_x = float(input("p for X: "))
+            p_y = float(input("p for Y:"))
+            p_z = float(input("p for Z: "))
+            p_t = float(input("p for T: "))
+            p_s = float(input("p for S: "))
+            p_tdag = float(input("p for T_dag: "))
+            p_sdag = float(input("p for S_dag: "))
+            p_h = float(input("p for H: "))
+            p_cnot = float(input("p for CNOT: "))
 
             gate_to_p = {'h': p_h,
-              'x': p_x,
-              'y': p_y,
-              'z': p_z,
-              'i': 1,
-              's': p_s,
-              'sdg': p_sdag,
-              't': p_t,
-              'tdg': p_tdag,
-              'cx': p_cnot,
-              'ccx': None}
+            'x': p_x,
+            'y': p_y,
+            'z': p_z,
+            'i': 1,
+            's': p_s,
+            'sdg': p_sdag,
+            't': p_t,
+            'tdg': p_tdag,
+            'cx': p_cnot,
+            'ccx': None}
 
     interpret_lines(file_path, noise)
     simulate_quantum_circuit(file_path, shots, noise)
